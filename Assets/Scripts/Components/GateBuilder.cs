@@ -1,17 +1,23 @@
 ﻿namespace Assets.Scripts.Components
 {
     using System.Collections.Generic;
+    using System.Linq;
     using UnityEngine;
 
     public class GateBuilder : MonoBehaviour
     {
         #region Private & Const Variables
 
-        [SerializeField]
-        private GameObject _gate0;
+        private const int s_GateCount = 2;
+        private const float s_ParticleLifeTimeMultiplier = .07f;
+        private const float s_OrbitalConstantA = -.00027777777f;
+        private const float s_OrbitalConstantB = -.00833333333f;
 
         [SerializeField]
-        private GameObject _gate1;
+        private GameObject _gateTop;
+
+        [SerializeField]
+        private GameObject _gateBottom;
 
         [SerializeField]
         private GameObject _middleGate;
@@ -20,14 +26,26 @@
         private GameObject _gateCollider;
 
         [SerializeField]
-        private CustomParticleSystem _particleSystem;
+        private CustomParticleSystem _butterflyParticleSystem;
 
         [SerializeField]
-        private float _particleEmitInterval = 1f;
+        private ParticleSystem _lightningParticleSystemTop;
+        
+        [SerializeField]
+        private ParticleSystem _lightningParticleSystemBottom;
+
+        [SerializeField]
+        private ParticleSystem _glowingParticleSystemTop;
+
+        [SerializeField]
+        private ParticleSystem _glowingParticleSystemBottom;
+
+        [SerializeField]
+        private float _butterflyEmitInterval = .5f;
 
         private float _gateLength;
 
-        private float _timer;
+        private float _butterflyTimer;
 
         private List<Vector2> _gatePoints = new List<Vector2>();
 
@@ -48,43 +66,179 @@
             Init();
         }
 
+        private void Update()
+        {
+            EmitButterflies();
+        }
+
+        /// <summary>
+        /// Initializes gate collider and sets particle settings
+        /// </summary>
         private void Init()
         {
-            var startPosition = _gate0.transform.localPosition;
+            var startPosition = _gateBottom.transform.localPosition;
             var middlePosition = _middleGate.transform.localPosition;
-            var endPosition = _gate1.transform.localPosition;
+            var endPosition = _gateTop.transform.localPosition;
             
             _gatePoints = CreateGatePoints( startPosition, middlePosition, endPosition);
+            EditLightnings();
             CreateGateCollider();
         }
 
+        /// <summary>
+        /// Edits lightning settings according to distance and angle between gates
+        /// </summary>
+        private void EditLightnings()
+        {
+            if (_lightningParticleSystemTop== null || _lightningParticleSystemBottom == null) 
+            {
+                throw new System.Exception($"Not all Lightning particle systems are defined. There should be {s_GateCount}");
+            }
+
+            if (_glowingParticleSystemTop == null || _glowingParticleSystemBottom == null)
+            {
+                throw new System.Exception($"Not all Glowing particle systems  are defined. There should be {s_GateCount}");
+            }
+
+            var distanceBetweenGates = _gateBottom.transform.position.DistanceTo(_gateTop.transform.position);
+
+            EditParticleSystemLenghts(distanceBetweenGates);
+            EditLightningCurve(distanceBetweenGates);
+        }
+
+        /// <summary>
+        /// Edits particle system lengths according to distance between gates
+        /// </summary>
+        /// <param name="distanceBetweenGates"></param>
+        private void EditParticleSystemLenghts(float distanceBetweenGates)
+        {
+            var lifeTimeMultiplier = distanceBetweenGates * s_ParticleLifeTimeMultiplier;
+            EditParticleSystemLenght(_lightningParticleSystemTop, lifeTimeMultiplier);
+            EditParticleSystemLenght(_lightningParticleSystemBottom, lifeTimeMultiplier);
+            EditParticleSystemLenght(_glowingParticleSystemTop, lifeTimeMultiplier);
+            EditParticleSystemLenght(_glowingParticleSystemBottom, lifeTimeMultiplier);
+        }
+
+        /// <summary>
+        /// Edits particle system length according to distance between gates
+        /// </summary>
+        /// <param name="particleSystem"></param>
+        /// <param name="lifeTimeMultiplier"></param>
+        private void EditParticleSystemLenght(ParticleSystem particleSystem, float lifeTimeMultiplier)
+        {
+            ParticleSystem.MainModule main = particleSystem.main;
+            main.startLifetimeMultiplier = lifeTimeMultiplier;
+        }
+
+        /// <summary>
+        /// Edits lightning curve according to angle between gates
+        /// </summary>
+        /// <param name="distanceBetweenGates"></param>
+        private void EditLightningCurve(float distanceBetweenGates)
+        {
+            bool switchUpDown = false;
+            float orbitalY = CalculateIdealOrbitalValue(out switchUpDown);
+            ParticleSystem.VelocityOverLifetimeModule lightningModuleTop =
+                _lightningParticleSystemTop.velocityOverLifetime;
+            ParticleSystem.VelocityOverLifetimeModule lightningModuleBottom =
+                _lightningParticleSystemBottom.velocityOverLifetime;
+
+
+            ParticleSystem.VelocityOverLifetimeModule glowingModuleTop = 
+                _glowingParticleSystemTop.velocityOverLifetime;
+            ParticleSystem.VelocityOverLifetimeModule glowingModuleBottom = 
+                _glowingParticleSystemBottom.velocityOverLifetime;
+
+
+            //lightningModuleTop.orbitalY = orbitalY;
+            //lightningModuleBottom.orbitalY = -orbitalY;
+            //glowingModuleTop.orbitalY = orbitalY;
+            //glowingModuleBottom.orbitalY = -orbitalY;
+
+            if (switchUpDown)
+            {
+                lightningModuleTop.orbitalY = -orbitalY;
+                lightningModuleBottom.orbitalY = orbitalY;
+                glowingModuleTop.orbitalY = -orbitalY;
+                glowingModuleBottom.orbitalY = orbitalY;
+            }
+            else 
+            {
+                lightningModuleTop.orbitalY = orbitalY;
+                lightningModuleBottom.orbitalY = -orbitalY;
+                glowingModuleTop.orbitalY = orbitalY;
+                glowingModuleBottom.orbitalY = -orbitalY;
+            }
+        }
+
+        /// <summary>
+        /// Calculated by f(x) = a*x^2 + b*x + c
+        /// </summary>
+        /// <returns></returns>
+        private float CalculateIdealOrbitalValue(out bool switchUpDown)
+        {
+            var topOriginAngle = _gateTop.transform.localEulerAngles.z;
+            float topAngle;
+
+            if (topOriginAngle > 180)
+            {
+                topAngle = 360 -topOriginAngle;
+                switchUpDown = true;
+            }
+            else 
+            {
+                topAngle = topOriginAngle;
+                switchUpDown = false;
+            }
+
+            var rotationDifference = topAngle - (_gateBottom.transform.localEulerAngles.z - 180);
+
+            return (s_OrbitalConstantA * Mathf.Pow(rotationDifference, 2))
+                + (s_OrbitalConstantB * rotationDifference);
+        }
+
+        /// <summary>
+        /// Create an edge collider between gates
+        /// </summary>
         private void CreateGateCollider()
         {
             var edgeCollider = GetComponent<EdgeCollider2D>();
+
+            if (edgeCollider == null) 
+            {
+                throw new System.Exception($"EdgeCollider2D is missing on {gameObject.name}");
+            }
+
             edgeCollider.points = _gatePoints.ToArray();
         }
-        private void Update()
-        {
-            EmitParticles();
-        }
 
-        private void EmitParticles()
+        /// <summary>
+        /// Emit butterflies according to given interval values
+        /// </summary>
+        private void EmitButterflies()
         {
-            _timer += Time.deltaTime; 
+            _butterflyTimer += Time.deltaTime;
 
-            if (_timer < _particleEmitInterval)
+            if (_butterflyTimer < _butterflyEmitInterval)
             {
                 return;
             }
 
-            _timer = 0;
+            _butterflyTimer = 0;
 
             var minIndexLimit = 2;
             var maxIndexLimit = _gatePoints.Count - 3;
             var randomIndex = Random.Range(minIndexLimit, maxIndexLimit);
-            _particleSystem.EmitParticle(_gatePoints[randomIndex]);
+            _butterflyParticleSystem.EmitParticle(_gatePoints[randomIndex]);
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="startPosition"></param>
+        /// <param name="middlePosition"></param>
+        /// <param name="endPosition"></param>
+        /// <returns></returns>
         private List<Vector2> CreateGatePoints(Vector2 startPosition, Vector2 middlePosition, Vector2 endPosition)
         {
             _gateLength = startPosition.DistanceTo(middlePosition) + middlePosition.DistanceTo(endPosition);
@@ -106,9 +260,9 @@
 
         private void OnDrawGizmos()
         {
-            var startPosition = _gate0.transform.position;
+            var startPosition = _gateBottom.transform.position;
             var middlePosition = _middleGate.transform.position;
-            var endPosition = _gate1.transform.position;
+            var endPosition = _gateTop.transform.position;
 
             Gizmos.color = Color.yellow;
             Gizmos.DrawSphere(middlePosition, 0.2f);
