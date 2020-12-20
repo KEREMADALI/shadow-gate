@@ -81,14 +81,14 @@
             var endPosition = _gateTop.transform.localPosition;
             
             _gatePoints = CreateGatePoints( startPosition, middlePosition, endPosition);
-            EditLightnings();
+            EditParticleSystems();
             CreateGateCollider();
         }
 
         /// <summary>
-        /// Edits lightning settings according to distance and angle between gates
+        /// Edits particle system settings according to distance and angle between gates
         /// </summary>
-        private void EditLightnings()
+        private void EditParticleSystems()
         {
             if (_lightningParticleSystemTop== null || _lightningParticleSystemBottom == null) 
             {
@@ -103,7 +103,7 @@
             var distanceBetweenGates = _gateBottom.transform.position.DistanceTo(_gateTop.transform.position);
 
             EditParticleSystemLenghts(distanceBetweenGates);
-            EditLightningCurve(distanceBetweenGates);
+            EditParticleSystemCurve(distanceBetweenGates);
         }
 
         /// <summary>
@@ -134,7 +134,7 @@
         /// Edits lightning curve according to angle between gates
         /// </summary>
         /// <param name="distanceBetweenGates"></param>
-        private void EditLightningCurve(float distanceBetweenGates)
+        private void EditParticleSystemCurve(float distanceBetweenGates)
         {
             bool switchUpDown = false;
             float orbitalY = CalculateIdealOrbitalValue(out switchUpDown);
@@ -148,12 +148,6 @@
                 _glowingParticleSystemTop.velocityOverLifetime;
             ParticleSystem.VelocityOverLifetimeModule glowingModuleBottom = 
                 _glowingParticleSystemBottom.velocityOverLifetime;
-
-
-            //lightningModuleTop.orbitalY = orbitalY;
-            //lightningModuleBottom.orbitalY = -orbitalY;
-            //glowingModuleTop.orbitalY = orbitalY;
-            //glowingModuleBottom.orbitalY = -orbitalY;
 
             if (switchUpDown)
             {
