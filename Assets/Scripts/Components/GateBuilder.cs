@@ -29,18 +29,23 @@
         private CustomParticleSystem _butterflyParticleSystem;
 
         [SerializeField]
-        private ParticleSystem[] _lightningParticleSystems;
+        private ParticleSystem _lightningParticleSystemTop;
+        
+        [SerializeField]
+        private ParticleSystem _lightningParticleSystemBottom;
+
+        [SerializeField]
+        private ParticleSystem _glowingParticleSystemTop;
+
+        [SerializeField]
+        private ParticleSystem _glowingParticleSystemBottom;
 
         [SerializeField]
         private float _butterflyEmitInterval = .5f;
 
-        private float _lightningSubEmitInterval = .05f;
-
         private float _gateLength;
 
         private float _butterflyTimer;
-
-        private float _lightningTimer;
 
         private List<Vector2> _gatePoints = new List<Vector2>();
 
@@ -64,24 +69,6 @@
         private void Update()
         {
             EmitButterflies();
-            LightningUpdate();
-        }
-
-        private void LightningUpdate()
-        {
-            _lightningTimer += 0.01f;
-
-            if (_lightningTimer < _lightningSubEmitInterval)
-            {
-                return;
-            }
-
-            _lightningTimer = 0;
-
-            foreach (var lightningParticleSystem in _lightningParticleSystems)
-            {
-                //lightningParticleSystem.TriggerSubEmitter(0);
-            }
         }
 
         /// <summary>
@@ -103,30 +90,44 @@
         /// </summary>
         private void EditLightnings()
         {
-            if (_lightningParticleSystems.Length != s_GateCount) 
+            if (_lightningParticleSystemTop== null || _lightningParticleSystemBottom == null) 
             {
-                throw new System.Exception($"Not all Lightning particle are defined. There should be {s_GateCount}");
+                throw new System.Exception($"Not all Lightning particle systems are defined. There should be {s_GateCount}");
+            }
+
+            if (_glowingParticleSystemTop == null || _glowingParticleSystemBottom == null)
+            {
+                throw new System.Exception($"Not all Glowing particle systems  are defined. There should be {s_GateCount}");
             }
 
             var distanceBetweenGates = _gateBottom.transform.position.DistanceTo(_gateTop.transform.position);
 
-            EditLightningLength(distanceBetweenGates);
+            EditParticleSystemLenghts(distanceBetweenGates);
             EditLightningCurve(distanceBetweenGates);
         }
 
         /// <summary>
-        /// Edits lightning length according to distance between gates
+        /// Edits particle system lengths according to distance between gates
         /// </summary>
         /// <param name="distanceBetweenGates"></param>
-        private void EditLightningLength(float distanceBetweenGates)
+        private void EditParticleSystemLenghts(float distanceBetweenGates)
         {
             var lifeTimeMultiplier = distanceBetweenGates * s_ParticleLifeTimeMultiplier;
+            EditParticleSystemLenght(_lightningParticleSystemTop, lifeTimeMultiplier);
+            EditParticleSystemLenght(_lightningParticleSystemBottom, lifeTimeMultiplier);
+            EditParticleSystemLenght(_glowingParticleSystemTop, lifeTimeMultiplier);
+            EditParticleSystemLenght(_glowingParticleSystemBottom, lifeTimeMultiplier);
+        }
 
-            foreach (var lightningParticleSystem in _lightningParticleSystems)
-            {
-                ParticleSystem.MainModule main = lightningParticleSystem.main;
-                main.startLifetimeMultiplier = lifeTimeMultiplier;
-            }
+        /// <summary>
+        /// Edits particle system length according to distance between gates
+        /// </summary>
+        /// <param name="particleSystem"></param>
+        /// <param name="lifeTimeMultiplier"></param>
+        private void EditParticleSystemLenght(ParticleSystem particleSystem, float lifeTimeMultiplier)
+        {
+            ParticleSystem.MainModule main = particleSystem.main;
+            main.startLifetimeMultiplier = lifeTimeMultiplier;
         }
 
         /// <summary>
@@ -135,25 +136,63 @@
         /// <param name="distanceBetweenGates"></param>
         private void EditLightningCurve(float distanceBetweenGates)
         {
-            var rotationDifference = _gateTop.transform.rotation.eulerAngles.z
-                - _gateBottom.transform.eulerAngles.z;
+            bool switchUpDown = false;
+            float orbitalY = CalculateIdealOrbitalValue(out switchUpDown);
+            ParticleSystem.VelocityOverLifetimeModule lightningModuleTop =
+                _lightningParticleSystemTop.velocityOverLifetime;
+            ParticleSystem.VelocityOverLifetimeModule lightningModuleBottom =
+                _lightningParticleSystemBottom.velocityOverLifetime;
 
-            float orbitalY = CalculateIdealOrbitalValue(rotationDifference);
 
-            foreach (var lightningParticleSystem in _lightningParticleSystems)
+            ParticleSystem.VelocityOverLifetimeModule glowingModuleTop = 
+                _glowingParticleSystemTop.velocityOverLifetime;
+            ParticleSystem.VelocityOverLifetimeModule glowingModuleBottom = 
+                _glowingParticleSystemBottom.velocityOverLifetime;
+
+
+            //lightningModuleTop.orbitalY = orbitalY;
+            //lightningModuleBottom.orbitalY = -orbitalY;
+            //glowingModuleTop.orbitalY = orbitalY;
+            //glowingModuleBottom.orbitalY = -orbitalY;
+
+            if (switchUpDown)
             {
-                ParticleSystem.VelocityOverLifetimeModule module = lightningParticleSystem.velocityOverLifetime;
-                module.orbitalY = orbitalY;
+                lightningModuleTop.orbitalY = -orbitalY;
+                lightningModuleBottom.orbitalY = orbitalY;
+                glowingModuleTop.orbitalY = -orbitalY;
+                glowingModuleBottom.orbitalY = orbitalY;
+            }
+            else 
+            {
+                lightningModuleTop.orbitalY = orbitalY;
+                lightningModuleBottom.orbitalY = -orbitalY;
+                glowingModuleTop.orbitalY = orbitalY;
+                glowingModuleBottom.orbitalY = -orbitalY;
             }
         }
 
         /// <summary>
         /// Calculated by f(x) = a*x^2 + b*x + c
         /// </summary>
-        /// <param name="rotationDifference"></param>
         /// <returns></returns>
-        private float CalculateIdealOrbitalValue(float rotationDifference)
+        private float CalculateIdealOrbitalValue(out bool switchUpDown)
         {
+            var topOriginAngle = _gateTop.transform.localEulerAngles.z;
+            float topAngle;
+
+            if (topOriginAngle > 180)
+            {
+                topAngle = 360 -topOriginAngle;
+                switchUpDown = true;
+            }
+            else 
+            {
+                topAngle = topOriginAngle;
+                switchUpDown = false;
+            }
+
+            var rotationDifference = topAngle - (_gateBottom.transform.localEulerAngles.z - 180);
+
             return (s_OrbitalConstantA * Mathf.Pow(rotationDifference, 2))
                 + (s_OrbitalConstantB * rotationDifference);
         }
