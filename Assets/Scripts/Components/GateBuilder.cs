@@ -143,7 +143,6 @@
             ParticleSystem.VelocityOverLifetimeModule lightningModuleBottom =
                 _lightningParticleSystemBottom.velocityOverLifetime;
 
-
             ParticleSystem.VelocityOverLifetimeModule glowingModuleTop = 
                 _glowingParticleSystemTop.velocityOverLifetime;
             ParticleSystem.VelocityOverLifetimeModule glowingModuleBottom = 
